@@ -1,116 +1,139 @@
 import SwiftUI
 
 struct ContentView: View {
+    // MARK: - State Properties
+    
     @State private var hasCheckedInToday = false
     @State private var checkInResponse = ""
     @State private var showingCrisisConfirm = false
     @State private var showingQuestions = false
     @State private var showingSettings = false
     @State private var showingProfile = false
-    @State private var showingLogin = false // New state to control login sheet
-    @State private var isLoggedIn = false // New state to track login status
-
+    
+    // ADDED: State to track if the check-in result is concerning.
+    @State private var isResultConcerning = false
+    
+    @Binding var isLoggedIn: Bool
+    @Binding var userName: String
+    @Binding var gamificationViewModel: GamificationViewModel
+    
     var body: some View {
-        ContactList()
         NavigationView {
-            ScrollView {
-                VStack(spacing: 0) {
-                    // Header Section with Profile and Settings
-                    HeaderView(
-                        onProfileTap: {
-                            if isLoggedIn {
-                                showingProfile = true
+            ZStack {
+                // Background gradient
+                LinearGradient(
+                    gradient: Gradient(colors: [Color.blue.opacity(0.3), Color.blue.opacity(0.1), .clear]),
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .ignoresSafeArea()
+                
+                // The main scrollable content of the home screen.
+                ScrollView {
+                    VStack(spacing: 0) {
+                        HeaderView(
+                            userName: userName,
+                            isLoggedIn: isLoggedIn,
+                            onProfileTap: { showingProfile = true },
+                            onSettingsTap: { showingSettings = true },
+                            onCrisisTap: { showingCrisisConfirm = true }
+                        )
+                        
+                        VStack(spacing: 24) {
+                            StatsHeaderView(viewModel: gamificationViewModel)
+                            
+                            if !hasCheckedInToday {
+                                CheckInCard(onCheckIn: {
+                                    showingQuestions = true
+                                })
                             } else {
-                                showingLogin = true
+                                // MODIFIED: Pass the 'isConcerning' state to the card.
+                                PostCheckInCard(response: checkInResponse, isConcerning: isResultConcerning)
                             }
-                        },
-                        onSettingsTap: { showingSettings = true }
-                    )
-
-                    // Main Content Area
-                    VStack(spacing: 24) {
-                        // Primary Check-in Card
-                        if !hasCheckedInToday {
-                            CheckInCard(onCheckIn: {
-                                showingQuestions = true
-                            })
-                        } else {
-                            PostCheckInCard(response: checkInResponse)
+                            
+                            MoodCalendarView()
+                            
+                            Spacer(minLength: 40)
                         }
-
-                        // Detailed Mood Calendar
-                        MoodCalendarView()
-
-                        // Secondary Feature Buttons
-                        SecondaryButtonsView()
-
-                        // Extra spacing before footer
-                        Spacer(minLength: 40)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 32)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 32)
+                }
+                .navigationBarHidden(true)
+                .navigationDestination(isPresented: $showingQuestions) {
+                    QuestionsView(
+                        // MODIFIED: The handler now accepts the score.
+                        onComplete: { response, score in
+                            hasCheckedInToday = true
+                            checkInResponse = response
+                            gamificationViewModel.completeDailyCheckIn(response: response, score: score)
+                            
+                            // ADDED: Logic to determine if the result is concerning.
+                            if score > 10 { // Threshold for "concerning" answers
+                                self.isResultConcerning = true
+                            } else {
+                                self.isResultConcerning = false
+                            }
+                            
+                            showingQuestions = false
+                        },
+                        onCancel: {
+                            showingQuestions = false
+                        }
+                    )
                 }
             }
-            .background(Color(.systemBackground))
-            .navigationBarHidden(true)
-        }
-        .overlay(
-            // Crisis Support Footer
-            VStack {
-                Spacer()
-                CrisisSupport(showingConfirm: $showingCrisisConfirm)
+            .alert("Crisis Support", isPresented: $showingCrisisConfirm) {
+                Button("Call 000", role: .destructive) { callEmergencyServices() }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("This will connect you with emergency services. Do you want to proceed?")
             }
-        )
-        .alert("Crisis Support", isPresented: $showingCrisisConfirm) {
-            Button("Call Now", role: .destructive) {
-                // In a real app, this would dial emergency services
-                print("Calling emergency services")
-            }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("This will connect you with emergency services. Do you want to proceed?")
+            .sheet(isPresented: $showingSettings) { SettingsView() }
+            .sheet(isPresented: $showingProfile) { ProfileView() }
         }
-        .sheet(isPresented: $showingQuestions) {
-            QuestionsView(
-                onComplete: { response in
-                    hasCheckedInToday = true
-                    checkInResponse = response
-                    showingQuestions = false
-                }
-            )
-        }
-        .sheet(isPresented: $showingSettings) {
-            SettingsView()
-        }
-        .sheet(isPresented: $showingProfile) {
-            ProfileView()
-        }
-        .sheet(isPresented: $showingLogin) { // Sheet for the LoginView
-            LoginView(isPresented: $showingLogin, isLoggedIn: $isLoggedIn)
+    }
+    
+    private func callEmergencyServices() {
+        guard let url = URL(string: "tel://000") else { return }
+        if UIApplication.shared.canOpenURL(url) {
+            UIApplication.shared.open(url)
         }
     }
 }
 
-// ... (The rest of ContentView.swift remains the same)
+// MARK: - Child Views
+
+// MODIFIED: The HeaderView now includes a crisis button.
 struct HeaderView: View {
+    let userName: String
+    let isLoggedIn: Bool
     let onProfileTap: () -> Void
     let onSettingsTap: () -> Void
-
+    let onCrisisTap: () -> Void
+    
     private var greeting: String {
         let hour = Calendar.current.component(.hour, from: Date())
+        var baseGreeting: String
         switch hour {
-        case 5..<12: return "Good morning"
-        case 12..<17: return "Good afternoon"
-        default: return "Good evening"
+        case 5..<12: baseGreeting = "Good morning"
+        case 12..<17: baseGreeting = "Good afternoon"
+        default: baseGreeting = "Good evening"
+        }
+        
+        if isLoggedIn && !userName.trimmingCharacters(in: .whitespaces).isEmpty {
+            return "\(baseGreeting), \(userName)"
+        } else {
+            return baseGreeting
         }
     }
-
+    
     private var dateString: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEEE, d MMMM yyyy"
         return formatter.string(from: Date())
     }
-
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
@@ -119,13 +142,20 @@ struct HeaderView: View {
                         .font(.title2)
                         .fontWeight(.medium)
                         .foregroundColor(.primary)
-
+                    
                     Text(dateString)
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
                 Spacer()
-                HStack(spacing: 12) {
+                HStack(spacing: 16) {
+                    // ADDED: Crisis button
+                    Button(action: onCrisisTap) {
+                        Image(systemName: "phone.fill")
+                            .font(.title)
+                            .foregroundColor(.red)
+                    }
+                    
                     Button(action: onProfileTap) {
                         Image(systemName: "person.circle").font(.title2)
                     }
@@ -141,16 +171,52 @@ struct HeaderView: View {
     }
 }
 
+struct StatsHeaderView: View {
+    let viewModel: GamificationViewModel
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            HStack(spacing: 8) {
+                Image(systemName: "sparkles")
+                    .font(.headline)
+                    .foregroundColor(.yellow)
+                Text("\(viewModel.auraPoints) Aura")
+                    .font(.headline)
+                    .fontWeight(.medium)
+            }
+            .padding(.vertical, 10)
+            .padding(.horizontal, 16)
+            .background(Color.yellow.opacity(0.1))
+            .cornerRadius(12)
+            
+            HStack(spacing: 8) {
+                Image(systemName: "flame.fill")
+                    .font(.headline)
+                    .foregroundColor(.orange)
+                Text("\(viewModel.dailyStreak) Day Streak")
+                    .font(.headline)
+                    .fontWeight(.medium)
+            }
+            .padding(.vertical, 10)
+            .padding(.horizontal, 16)
+            .background(Color.orange.opacity(0.1))
+            .cornerRadius(12)
+            
+            Spacer()
+        }
+    }
+}
+
 struct CheckInCard: View {
     let onCheckIn: () -> Void
-
+    
     var body: some View {
         VStack(spacing: 24) {
-            Text("How are you feeling today?")
+            Text("How are you feeling today? 😊")
                 .font(.title2)
                 .fontWeight(.medium)
                 .multilineTextAlignment(.center)
-
+            
             Button(action: onCheckIn) {
                 Text("Start Check-in")
                     .font(.headline)
@@ -169,57 +235,74 @@ struct CheckInCard: View {
     }
 }
 
+// MODIFIED: This view is now more dynamic.
 struct PostCheckInCard: View {
     let response: String
-
+    let isConcerning: Bool
+    @State private var showingContactList = false
+    
     var body: some View {
         VStack(spacing: 20) {
             HStack {
-                Image(systemName: "checkmark.circle.fill")
+                Image(systemName: isConcerning ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
                     .font(.title2)
-                    .foregroundColor(.green)
-                Text("Thank you for checking in today")
+                    .foregroundColor(isConcerning ? .orange : .green)
+                Text(isConcerning ? "Thank You for Sharing" : "Thank You for Checking In")
                     .font(.title3)
                     .fontWeight(.medium)
             }
             VStack(alignment: .leading, spacing: 12) {
-                Text("You mentioned feeling a bit low. Here's a short breathing exercise from the Resource Hub that might help.")
+                Text(response)
                     .font(.body)
                     .foregroundColor(.secondary)
-                Button(action: { /* Navigate */ }) {
-                    HStack {
-                        Image(systemName: "leaf.fill")
-                        Text("Try Breathing Exercise").fontWeight(.medium)
+                
+                // ADDED: Conditional button to show contacts.
+                if isConcerning {
+                    Button(action: { showingContactList = true }) {
+                        HStack {
+                            Image(systemName: "phone.fill")
+                            Text("Contact Your Support Team").fontWeight(.medium)
+                        }
+                        .font(.subheadline)
+                        .foregroundColor(.red)
                     }
-                    .font(.subheadline)
-                    .foregroundColor(.green)
+                } else {
+                    Button(action: { /* Navigate */ }) {
+                        HStack {
+                            Image(systemName: "leaf.fill")
+                            Text("Try Breathing Exercise").fontWeight(.medium)
+                        }
+                        .font(.subheadline)
+                        .foregroundColor(.green)
+                    }
                 }
             }
             .padding(.top, 8)
         }
         .padding(32)
-        .background(RoundedRectangle(cornerRadius: 20).fill(Color.green.opacity(0.05)))
-        .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.green.opacity(0.1), lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: 20).fill(isConcerning ? Color.orange.opacity(0.05) : Color.green.opacity(0.05)))
+        .overlay(RoundedRectangle(cornerRadius: 20).stroke(isConcerning ? Color.orange.opacity(0.1) : Color.green.opacity(0.1), lineWidth: 1))
+        // ADDED: Sheet to present the ContactList view.
+        .sheet(isPresented: $showingContactList) {
+            ContactList()
+        }
     }
 }
-
-// NEW: This view displays the weekly calendar grid directly.
 struct MoodCalendarView: View {
     private let calendar = Calendar.current
     private let today = Date()
-
+    
     private var weekDates: [Date] {
         let startOfWeek = calendar.dateInterval(of: .weekOfYear, for: today)?.start ?? today
         return (0..<7).compactMap { dayOffset in
             calendar.date(byAdding: .day, value: dayOffset, to: startOfWeek)
         }
     }
-
+    
     private let dayAbbreviations = ["M", "T", "W", "T", "F", "S", "S"]
-
+    
     var body: some View {
-        VStack(spacing: 16) {
-            // Header for the calendar component
+        VStack(spacing: 24) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Mood Calendar")
@@ -229,10 +312,8 @@ struct MoodCalendarView: View {
                 }
                 Spacer()
             }
-
-            // Weekly Calendar Grid
+            
             VStack(spacing: 8) {
-                // Days of week headers
                 HStack {
                     ForEach(dayAbbreviations, id: \.self) { day in
                         Text(day)
@@ -241,8 +322,7 @@ struct MoodCalendarView: View {
                             .frame(maxWidth: .infinity)
                     }
                 }
-
-                // Date numbers and mood indicators
+                
                 HStack {
                     ForEach(Array(weekDates.enumerated()), id: \.offset) { index, date in
                         VStack(spacing: 8) {
@@ -250,15 +330,13 @@ struct MoodCalendarView: View {
                                 .font(.caption)
                                 .fontWeight(calendar.isDateInToday(date) ? .bold : .regular)
                                 .foregroundColor(calendar.isDateInToday(date) ? .primary : .secondary)
-
-                            // Example mood data for past days
+                            
                             if index < 4 {
                                 Circle()
                                     .fill(moodBackgroundColor(for: index))
                                     .frame(width: 32, height: 32)
                                     .overlay(Text(moodEmoji(for: index)).font(.system(size: 14)))
                             } else {
-                                // Empty space for future days
                                 Circle().fill(Color.clear).frame(width: 32, height: 32)
                             }
                         }
@@ -282,7 +360,7 @@ struct MoodCalendarView: View {
                 .stroke(Color.indigo.opacity(0.1), lineWidth: 1)
         )
     }
-
+    
     private func moodBackgroundColor(for index: Int) -> Color {
         switch index {
         case 0: return .yellow.opacity(0.3)
@@ -293,116 +371,54 @@ struct MoodCalendarView: View {
         default: return .clear
         }
     }
-
+    
     private func moodEmoji(for index: Int) -> String {
-        ["😊", "😢", "😐", "😊", "", "", ""][index]
+        ["😊", "😞", "😑", "😊", "", "", ""][index]
     }
 }
 
-struct SecondaryButtonsView: View {
-    var body: some View {
-        VStack(spacing: 16) {
-            HStack(spacing: 16) {
-                SecondaryButton(icon: "calendar", title: "My Support Plan", subtitle: "Medications & appointments", color: .purple, action: {})
-                SecondaryButton(icon: "book", title: "Log Book", subtitle: "Log your activity", color: .orange, action: {})
-            }
-            HStack(spacing: 16) {
-                SecondaryButton(icon: "location", title: "Near Me", subtitle: "Clinics and Pharmacy", color: .cyan, action: {})
-                SecondaryButton(icon: "phone", title: "Contacts", subtitle: "Person and Supervisor", color: .green, action: {})
-            }
-                
-            HStack(spacing: 16) {
-                SecondaryButton(icon:"person.3", title: "Community", subtitle: "Connect to others", color:
-                    .black, action: {})
-            }
-        }
-    }
-}
+// REMOVED: The old CrisisSupport view is no longer needed here,
+// as the button has been moved into the HeaderView.
 
-struct SecondaryButton: View {
-    let icon: String, title: String, subtitle: String, color: Color, action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 12) {
-                Image(systemName: icon).font(.title2).foregroundColor(color)
-                VStack(spacing: 4) {
-                    Text(title).font(.headline).fontWeight(.medium)
-                    Text(subtitle).font(.caption).foregroundColor(.secondary)
-                }
-                .foregroundColor(.primary)
-                .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity, minHeight: 120)
-            .background(RoundedRectangle(cornerRadius: 16).fill(color.opacity(0.05)))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(color.opacity(0.1), lineWidth: 1))
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-}
-
-struct CrisisSupport: View {
-    @Binding var showingConfirm: Bool
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Rectangle().fill(Color.gray.opacity(0.2)).frame(height: 1)
-            Button(action: { showingConfirm = true }) {
-                HStack {
-                    Image(systemName: "phone.fill").font(.title3)
-                    Text("Need help now?").font(.headline).fontWeight(.medium)
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 56)
-                .background(Color.red.opacity(0.1))
-                .foregroundColor(.red)
-            }
-        }
-        .background(Color(.systemBackground))
-    }
-}
-
-// MARK: - Sheet Views
 struct SettingsView: View {
-    @Environment(\.presentationMode) var presentationMode
+    @Environment(\.dismiss) var dismiss
+    @State private var notificationsEnabled = false
+    
     var body: some View {
         NavigationView {
-            // Content for settings
-            Text("Settings View").navigationTitle("Settings").navigationBarItems(trailing: Button("Done") { presentationMode.wrappedValue.dismiss() })
-        }
-    }
-}
-
-struct ProfileView: View {
-    @Environment(\.presentationMode) var presentationMode
-    var body: some View {
-        NavigationView {
-            // Content for profile
-            Text("Profile View").navigationTitle("Profile").navigationBarItems(trailing: Button("Done") { presentationMode.wrappedValue.dismiss() })
-        }
-    }
-}
-
-struct QuestionsView: View {
-    let onComplete: (String) -> Void
-    @Environment(\.presentationMode) var presentationMode
-
-    var body: some View {
-        NavigationView {
-            VStack {
-                Text("This is where your questions would go.").padding()
-                Spacer()
-                Button("Complete Check-in") { onComplete("feeling better") }
-                    .font(.headline).foregroundColor(.white).frame(maxWidth: .infinity, minHeight: 50).background(Color.blue).cornerRadius(10).padding()
+            Form {
+                Section(header: Text("Notifications")) {
+                    Toggle("Enable Daily Reminders", isOn: $notificationsEnabled)
+                        .onChange(of: notificationsEnabled) { _, newValue in
+                            if newValue {
+                                NotificationManager.shared.scheduleDailyReminder(at: Date())
+                            } else {
+                                NotificationManager.shared.cancelNotifications()
+                            }
+                        }
+                }
             }
-            .navigationTitle("Check-in")
-            .navigationBarItems(leading: Button("Cancel") { presentationMode.wrappedValue.dismiss() })
+            .navigationTitle("Settings")
+            .navigationBarItems(trailing: Button("Done") { dismiss() })
+            .onAppear {
+                UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
+                    DispatchQueue.main.async {
+                        notificationsEnabled = !requests.isEmpty
+                    }
+                }
+            }
         }
     }
 }
 
+// MARK: - Preview
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
-        ContentView()
+        // The preview is updated to reflect the removal of the 'showingLogin' binding.
+        ContentView(
+            isLoggedIn: .constant(true),
+            userName: .constant("John"),
+            gamificationViewModel: .constant(GamificationViewModel())
+        )
     }
 }
