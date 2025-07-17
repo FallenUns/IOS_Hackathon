@@ -89,6 +89,50 @@ struct ContactCard: View {
     }
 }
 
+struct EmergencyContactCard: View {
+    @State private var showAlert = false
+
+    var body: some View {
+        HStack {
+            Image(systemName: "light.beacon.min")
+                .resizable()
+                .frame(width: 40, height: 40)
+                .foregroundColor(.black)
+            Spacer()
+
+            VStack(alignment: .leading) {
+                Text("EMERGENCY").bold().foregroundColor(.black)
+                Text("000").foregroundColor(.black)
+                Text("Emergency Services").foregroundColor(.black)
+            }
+
+            Spacer()
+
+            // 📞 Call Button
+            Button {
+                showAlert = true
+            } label: {
+                Image(systemName: "phone.fill")
+                    .foregroundColor(.green)
+            }
+        }
+        .padding()
+        .background(Color.red.opacity(0.6))
+        .cornerRadius(12)
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.red, lineWidth: 3))
+        .contentShape(Rectangle())
+        .alert(isPresented: $showAlert) {
+            Alert(
+                title: Text("Call 000?"),
+                message: Text("Are you sure you want to call Emergency Services?"),
+                primaryButton: .destructive(Text("Yes")),
+                secondaryButton: .cancel()
+            )
+        }
+    }
+}
+
+
 
 
 struct ContactList: View {
@@ -100,38 +144,55 @@ struct ContactList: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Spacer()
             Text("Who can you Contact?")
-                .font(.title2)
+                .font(.title)
                 .bold()
                 .foregroundColor(.black)
                 .padding(.horizontal)
             
-            List {
+            VStack {
                 ForEach(sortedContactIndices(), id: \.self) { index in
                     ContactCard(contact: $contacts[index])
                         .listRowSeparator(.hidden)
                         .listRowBackground(Color.clear)
                 }
+                .padding(.vertical, 8)
             }
-            .listStyle(PlainListStyle())
+            .padding(.horizontal)
 
-            HStack {
-                Spacer()
-                Button(action: {
-                    // Add contact action
-                }) {
-                    Image(systemName: "plus")
-                        .resizable()
-                        .frame(width: 20, height: 20)
-                        .foregroundColor(.white)
-                        .padding()
+            VStack(spacing: 8) {
+                HStack {
+                    Spacer()
+                    Button(action: {
+                        // Add contact action
+                    }) {
+                        Image(systemName: "plus")
+                            .resizable()
+                            .frame(width: 20, height: 20)
+                            .foregroundColor(.white)
+                            .padding()
+                    }
+                    .background(Color.green)
+                    .clipShape(Circle())
+                    .shadow(radius: 5)
+                    .padding(.trailing)
                 }
-                .background(Color.green)
-                .clipShape(Circle())
-                .shadow(radius: 5)
-                .padding()
+
+                Divider()
+                    .frame(height: 0.2)
+                    .background(Color.gray)
+                    .padding(.horizontal, 30)
+                
+                Text("Emergency Contact").bold()
+                    .foregroundColor(.red)
+                    .font(.title3)
+                
+                EmergencyContactCard()
+                    .padding(.horizontal)
+
+                
             }
+
         }
     }
     
@@ -142,6 +203,7 @@ struct ContactList: View {
         }
     }
 }
+
 
 
 #Preview {
