@@ -12,13 +12,15 @@ struct ContentView: View {
     
     // ADDED: State to track if the check-in result is concerning.
     @State private var isResultConcerning = false
-    
+    @State private var dailyMood: Int? = nil // ADDED: To capture mood from QuestionsView
+    @State private var moodHistory: [Date: Int] = [:] // ADDED: To store mood history
+
     @Binding var isLoggedIn: Bool
     @Binding var userName: String
     @Binding var gamificationViewModel: GamificationViewModel
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 // Background gradient
                 LinearGradient(
@@ -51,7 +53,7 @@ struct ContentView: View {
                                 PostCheckInCard(response: checkInResponse, isConcerning: isResultConcerning)
                             }
                             
-                            MoodCalendarView()
+                            MoodCalendarView(moodHistory: $moodHistory) // MODIFIED: Pass mood history
                             
                             Spacer(minLength: 40)
                         }
@@ -62,12 +64,18 @@ struct ContentView: View {
                 .navigationBarHidden(true)
                 .navigationDestination(isPresented: $showingQuestions) {
                     QuestionsView(
+                        moodScore: $dailyMood, // MODIFIED: Pass binding for mood
                         // MODIFIED: The handler now accepts the score.
                         onComplete: { response, score in
                             hasCheckedInToday = true
                             checkInResponse = response
                             gamificationViewModel.completeDailyCheckIn(response: response, score: score)
                             
+                            if let mood = dailyMood {
+                                moodHistory[Calendar.current.startOfDay(for: Date())] = mood
+                            }
+
+
                             // ADDED: Logic to determine if the result is concerning.
                             if score > 10 { // Threshold for "concerning" answers
                                 self.isResultConcerning = true
@@ -152,7 +160,7 @@ struct HeaderView: View {
                     // ADDED: Crisis button
                     Button(action: onCrisisTap) {
                         Image(systemName: "phone.fill")
-                            .font(.title)
+                            .font(.title2)
                             .foregroundColor(.red)
                     }
                     
@@ -289,6 +297,7 @@ struct PostCheckInCard: View {
     }
 }
 struct MoodCalendarView: View {
+    @Binding var moodHistory: [Date: Int] // MODIFIED: Use mood history
     private let calendar = Calendar.current
     private let today = Date()
     
@@ -331,11 +340,11 @@ struct MoodCalendarView: View {
                                 .fontWeight(calendar.isDateInToday(date) ? .bold : .regular)
                                 .foregroundColor(calendar.isDateInToday(date) ? .primary : .secondary)
                             
-                            if index < 4 {
+                            if let moodScore = moodHistory[calendar.startOfDay(for: date)] {
                                 Circle()
-                                    .fill(moodBackgroundColor(for: index))
+                                    .fill(moodBackgroundColor(for: moodScore))
                                     .frame(width: 32, height: 32)
-                                    .overlay(Text(moodEmoji(for: index)).font(.system(size: 14)))
+                                    .overlay(Text(moodEmoji(for: moodScore)).font(.system(size: 14)))
                             } else {
                                 Circle().fill(Color.clear).frame(width: 32, height: 32)
                             }
@@ -361,19 +370,22 @@ struct MoodCalendarView: View {
         )
     }
     
-    private func moodBackgroundColor(for index: Int) -> Color {
-        switch index {
-        case 0: return .yellow.opacity(0.3)
-        case 1: return .blue.opacity(0.3)
-        case 2: return .gray.opacity(0.3)
-        case 3: return .yellow.opacity(0.3)
-        case 4: return .orange.opacity(0.3)
+    private func moodBackgroundColor(for score: Int) -> Color {
+        switch score {
+        case 0: return .yellow.opacity(0.3) // Good
+        case 1: return .blue.opacity(0.3)   // Okay
+        case 2: return .gray.opacity(0.3)    // Low
         default: return .clear
         }
     }
     
-    private func moodEmoji(for index: Int) -> String {
-        ["😊", "😞", "😑", "😊", "", "", ""][index]
+    private func moodEmoji(for score: Int) -> String {
+        switch score {
+        case 0: return "😊"
+        case 1: return "😐"
+        case 2: return "😔"
+        default: return ""
+        }
     }
 }
 

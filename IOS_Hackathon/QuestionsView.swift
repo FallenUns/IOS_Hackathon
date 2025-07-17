@@ -47,6 +47,8 @@ struct PrimaryButtonStyle: ButtonStyle {
 
 // The main view for the check-in process.
 struct QuestionsView: View {
+    // MODIFIED: Binding to pass the mood score back to the parent view.
+    @Binding var moodScore: Int?
     // MODIFIED: The onComplete handler now returns the final message and the score.
     let onComplete: (String, Int) -> Void
     let onCancel: () -> Void
@@ -170,6 +172,9 @@ struct QuestionsView: View {
     }
 
     func handleAnswer(points: Int, step: Int) {
+        if step == 1 {
+            moodScore = points // MODIFIED: Capture the mood score from the first question.
+        }
         score += points
         currentQuote = quote(for: points, at: step)
         showQuote = true
@@ -190,7 +195,7 @@ struct QuestionsView: View {
 struct QuestionsView_Previews: PreviewProvider {
     static var previews: some View {
         NavigationView {
-            QuestionsView(onComplete: { _, _ in }, onCancel: {})
+            QuestionsView(moodScore: .constant(nil), onComplete: { _, _ in }, onCancel: {})
         }
     }
 }

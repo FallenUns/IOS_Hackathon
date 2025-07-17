@@ -10,7 +10,7 @@ struct CommunityView: View {
             Text("Community Hub")
                 .font(.largeTitle)
                 .fontWeight(.bold)
-            Text("Connect with others, share experiences, and find support. This feature is coming soon!")
+            Text("Connect with others, share experiences, and find support.")
                 .font(.body)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)

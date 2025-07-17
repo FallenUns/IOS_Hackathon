@@ -4,7 +4,7 @@ struct MainTabView: View {
     // MARK: - State
     @AppStorage("isCarerModeEnabled") private var isCarerModeEnabled: Bool = false
     @State private var isLoggedIn = true
-    @State private var userName = "John"
+    @State private var userName = "Hannah"
     @State private var gamificationViewModel = GamificationViewModel()
     
     // MARK: - Body
