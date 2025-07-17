@@ -9,9 +9,18 @@ import SwiftUI
 
 @main
 struct IOS_HackathonApp: App {
+    @AppStorage("hasCompletedOnboarding") var hasCompletedOnboarding: Bool = false
+    
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            // If onboarding is complete, show the new MainTabView.
+            // Otherwise, show the OnboardingView.
+            if hasCompletedOnboarding {
+                // MODIFIED: The root view of the app is now MainTabView.
+                MainTabView()
+            } else {
+                OnboardingView()
+            }
         }
     }
 }
