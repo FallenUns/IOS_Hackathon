@@ -11,6 +11,7 @@ struct ContentView: View {
     @State private var isLoggedIn = false // New state to track login status
 
     var body: some View {
+        ContactList()
         NavigationView {
             ScrollView {
                 VStack(spacing: 0) {
